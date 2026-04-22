@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import { StepHeader } from "./_components/StepHeader";
 
-type Sex = "kobieta" | "mężczyzna";
-type Goal = "redukcja" | "masa" | "rekonstrukcja";
+type Sex = "kobieta" | "mezczyzna";
+type Goal = "schudnac" | "utrzymac" | "miesnie";
 
 function numberOrNaN(value: string) {
   const normalized = value.replace(",", ".");
@@ -71,8 +71,20 @@ export default function Home() {
   const [age, setAge] = React.useState("");
   const [weight, setWeight] = React.useState("");
 
+  const sexLabel =
+    sex === "kobieta" ? "Kobieta" : sex === "mezczyzna" ? "Mężczyzna" : "";
+
   const [goal, setGoal] = React.useState<Goal | "">("");
   const [activity, setActivity] = React.useState(35);
+
+  const goalLabel =
+    goal === "schudnac"
+      ? "Chcę Schudnąć"
+      : goal === "utrzymac"
+        ? "Chcę Utrzymać"
+        : goal === "miesnie"
+          ? "Chcę Zbudować Mięśnie"
+          : "";
 
   const ageNum = numberOrNaN(age);
   const weightNum = numberOrNaN(weight);
@@ -110,12 +122,12 @@ export default function Home() {
       : 0;
 
   const goalMultiplier =
-    goal === "redukcja" ? 0.85 : goal === "masa" ? 1.1 : 1.0;
+    goal === "schudnac" ? 0.85 : goal === "miesnie" ? 1.1 : 1.0;
 
   const targetCalories = Math.round(maintenanceCalories * goalMultiplier);
 
   const proteinPerKg =
-    goal === "redukcja" ? 2.0 : goal === "masa" ? 1.8 : 1.9;
+    goal === "schudnac" ? 2.0 : goal === "miesnie" ? 1.8 : 1.9;
   const fatPerKg = 0.8;
 
   const proteinG = Math.round(
@@ -153,7 +165,7 @@ export default function Home() {
                   Krok 1: Twoje Dane
                 </h1>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  Płeć, wiek i waga — to wystarczy na start.
+                  Płeć, wiek i waga - to wystarczy na start.
                 </p>
               </div>
 
@@ -169,8 +181,8 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      className={pillClasses(sex === "mężczyzna")}
-                      onClick={() => setSex("mężczyzna")}
+                      className={pillClasses(sex === "mezczyzna")}
+                      onClick={() => setSex("mezczyzna")}
                     >
                       Mężczyzna
                     </button>
@@ -204,7 +216,7 @@ export default function Home() {
 
               {!step1Valid ? (
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Uzupełnij dane (wiek 10–100, waga 30–250), aby przejść dalej.
+                  Uzupełnij dane (wiek 10-100, waga 30-250), aby przejść dalej.
                 </p>
               ) : null}
             </div>
@@ -217,31 +229,40 @@ export default function Home() {
                   Krok 2: Cel
                 </h1>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  Wybierz kierunek — resztę dopasujemy.
+                  Wybierz cel: -15%, 0% lub +10% kalorii.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <button
                   type="button"
-                  className={pillClasses(goal === "redukcja")}
-                  onClick={() => setGoal("redukcja")}
+                  className={[
+                    pillClasses(goal === "schudnac"),
+                    "min-h-24 px-4 text-base",
+                  ].join(" ")}
+                  onClick={() => setGoal("schudnac")}
                 >
-                  Redukcja
+                  Chcę Schudnąć
                 </button>
                 <button
                   type="button"
-                  className={pillClasses(goal === "masa")}
-                  onClick={() => setGoal("masa")}
+                  className={[
+                    pillClasses(goal === "utrzymac"),
+                    "min-h-24 px-4 text-base",
+                  ].join(" ")}
+                  onClick={() => setGoal("utrzymac")}
                 >
-                  Masa
+                  Chcę Utrzymać
                 </button>
                 <button
                   type="button"
-                  className={pillClasses(goal === "rekonstrukcja")}
-                  onClick={() => setGoal("rekonstrukcja")}
+                  className={[
+                    pillClasses(goal === "miesnie"),
+                    "min-h-24 px-4 text-base",
+                  ].join(" ")}
+                  onClick={() => setGoal("miesnie")}
                 >
-                  Rekonstrukcja
+                  Chcę Zbudować Mięśnie
                 </button>
               </div>
             </div>
@@ -254,7 +275,7 @@ export default function Home() {
                   Krok 3: Aktywność
                 </h1>
                 <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  Suwak od „Kanapowiec” do „Sportowiec”.
+                  Suwak od "Kanapowiec" do "Sportowiec".
                 </p>
               </div>
 
@@ -290,7 +311,7 @@ export default function Home() {
                 <span className="font-medium text-zinc-900 dark:text-zinc-50">
                   {maintenanceCalories > 0
                     ? `${formatInt(maintenanceCalories)} kcal`
-                    : "—"}
+                    : "-"}
                 </span>{" "}
                 ({format1(activityKcalPerKg)} kcal/kg).
               </p>
@@ -317,13 +338,13 @@ export default function Home() {
                     <div>
                       <dt className="text-zinc-500 dark:text-zinc-400">Płeć</dt>
                       <dd className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {sex || "—"}
+                        {sexLabel || "-"}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-zinc-500 dark:text-zinc-400">Wiek</dt>
                       <dd className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {Number.isFinite(ageNum) ? `${formatInt(ageNum)} lat` : "—"}
+                        {Number.isFinite(ageNum) ? `${formatInt(ageNum)} lat` : "-"}
                       </dd>
                     </div>
                     <div>
@@ -331,13 +352,13 @@ export default function Home() {
                       <dd className="font-medium text-zinc-900 dark:text-zinc-50">
                         {Number.isFinite(weightNum)
                           ? `${format1(weightNum)} kg`
-                          : "—"}
+                          : "-"}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-zinc-500 dark:text-zinc-400">Cel</dt>
                       <dd className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {goal || "—"}
+                        {goalLabel || "-"}
                       </dd>
                     </div>
                     <div className="col-span-2">
@@ -361,7 +382,7 @@ export default function Home() {
                         Kalorie
                       </span>
                       <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                        {targetCalories > 0 ? `${formatInt(targetCalories)} kcal` : "—"}
+                        {targetCalories > 0 ? `${formatInt(targetCalories)} kcal` : "-"}
                       </span>
                     </p>
                     <p className="flex items-baseline justify-between">
@@ -369,7 +390,7 @@ export default function Home() {
                         Białko
                       </span>
                       <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {proteinG > 0 ? `${formatInt(proteinG)} g` : "—"}
+                        {proteinG > 0 ? `${formatInt(proteinG)} g` : "-"}
                       </span>
                     </p>
                     <p className="flex items-baseline justify-between">
@@ -377,7 +398,7 @@ export default function Home() {
                         Tłuszcze
                       </span>
                       <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {fatG > 0 ? `${formatInt(fatG)} g` : "—"}
+                        {fatG > 0 ? `${formatInt(fatG)} g` : "-"}
                       </span>
                     </p>
                     <p className="flex items-baseline justify-between">
@@ -385,12 +406,12 @@ export default function Home() {
                         Węgle
                       </span>
                       <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                        {carbsG > 0 ? `${formatInt(carbsG)} g` : "—"}
+                        {carbsG > 0 ? `${formatInt(carbsG)} g` : "-"}
                       </span>
                     </p>
                   </div>
                   <p className="mt-4 text-xs text-zinc-600 dark:text-zinc-400">
-                    To szybki szacunek na start — możesz doprecyzować dane i wrócić
+                    To szybki szacunek na start - możesz doprecyzować dane i wrócić
                     do kroków.
                   </p>
                 </div>
@@ -422,3 +443,4 @@ export default function Home() {
     </div>
   );
 }
+
