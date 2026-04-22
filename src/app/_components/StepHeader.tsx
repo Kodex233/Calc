@@ -29,21 +29,30 @@ export function StepHeader({
     steps.length <= 1 ? 0 : clamp01(safeCurrentIndex / (steps.length - 1));
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-zinc-200/70 bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 dark:border-zinc-800/60 dark:bg-black/70">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-4">
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Twój Plan
-          </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+    <header className="sticky top-0 z-50 w-full border-b border-[color:var(--border)] bg-white/95 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[color:var(--accent-soft)] text-sm font-black text-[color:var(--accent)]">
+              TP
+            </span>
+            <div>
+              <p className="text-sm font-semibold tracking-tight text-slate-900">
+                Twój plan
+              </p>
+              <p className="text-xs text-slate-500">Prosty kalkulator celu</p>
+            </div>
+          </div>
+
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
             Krok {safeCurrentIndex + 1}/{steps.length}
-          </p>
+          </span>
         </div>
 
         <div className="relative">
-          <div className="absolute left-0 right-0 top-4 h-px bg-zinc-200 dark:bg-zinc-800" />
+          <div className="absolute left-0 right-0 top-4 h-1 rounded-full bg-slate-200" />
           <div
-            className="absolute left-0 top-4 h-px bg-zinc-900 dark:bg-zinc-100"
+            className="absolute left-0 top-4 h-1 rounded-full bg-[color:var(--accent)]"
             style={{ width: `${progress * 100}%` }}
           />
 
@@ -54,22 +63,22 @@ export function StepHeader({
               const canGoTo = Boolean(onGoTo) && index <= safeCurrentIndex;
 
               const circleClasses = isCurrent
-                ? "border-zinc-900 bg-white text-zinc-900 dark:border-zinc-100 dark:bg-black dark:text-zinc-50"
+                ? "border-[color:var(--accent)] bg-[color:var(--accent)] text-white"
                 : isDone
-                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-black"
-                  : "border-zinc-300 bg-white text-zinc-400 dark:border-zinc-700 dark:bg-black dark:text-zinc-500";
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-300 bg-white text-slate-500";
 
               const labelClasses = isCurrent
-                ? "text-zinc-900 dark:text-zinc-50"
+                ? "text-slate-900"
                 : isDone
-                  ? "text-zinc-700 dark:text-zinc-200"
-                  : "text-zinc-500 dark:text-zinc-400";
+                  ? "text-slate-700"
+                  : "text-slate-500";
 
               const content = (
                 <span className="flex max-w-[7.5rem] flex-col items-center gap-2 text-center sm:max-w-none sm:flex-row sm:items-start sm:text-left">
                   <span
                     className={[
-                      "flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold",
+                      "flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold",
                       circleClasses,
                     ].join(" ")}
                     aria-hidden="true"
@@ -93,14 +102,14 @@ export function StepHeader({
                     <button
                       type="button"
                       onClick={() => onGoTo?.(index)}
-                      className="group w-full rounded-lg p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-zinc-100 dark:focus-visible:ring-offset-black"
+                      className="w-full rounded-xl p-1 text-left transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                       aria-current={isCurrent ? "step" : undefined}
                     >
                       {content}
                     </button>
                   ) : (
                     <div
-                      className="w-full p-1"
+                      className="w-full rounded-xl p-1"
                       aria-current={isCurrent ? "step" : undefined}
                     >
                       {content}
@@ -115,4 +124,3 @@ export function StepHeader({
     </header>
   );
 }
-

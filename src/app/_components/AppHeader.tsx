@@ -24,26 +24,26 @@ export function AppHeader({
     return [
       "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition",
       active
-        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
-        : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+        ? "bg-blue-600 text-white"
+        : "bg-slate-100 text-slate-700 hover:bg-slate-200",
     ].join(" ");
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-zinc-200/70 bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/75 dark:border-zinc-800/60 dark:bg-black/70">
+    <header className="sticky top-0 z-50 w-full border-b border-[color:var(--border)] bg-white/95 backdrop-blur">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-4">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="rounded-xl bg-zinc-900 p-2 text-white dark:bg-zinc-100 dark:text-black">
+          <div className="flex items-center gap-3">
+            <span className="rounded-2xl bg-blue-50 p-2.5 text-blue-600">
               <IconStats className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+              <p className="text-sm font-semibold tracking-tight text-slate-900">
                 Statystyki
               </p>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                {calories > 0 ? `${calories} kcal` : "-"} · B {proteinG || 0}g · T{" "}
-                {fatG || 0}g · W {carbsG || 0}g
+              <p className="text-xs text-slate-500">
+                {calories > 0 ? `${calories} kcal` : "-"} | B {proteinG || 0}g | T{" "}
+                {fatG || 0}g | W {carbsG || 0}g
               </p>
             </div>
           </div>
@@ -71,4 +71,3 @@ export function AppHeader({
     </header>
   );
 }
-

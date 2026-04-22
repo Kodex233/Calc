@@ -3,6 +3,7 @@
 import * as React from "react";
 import { StepHeader } from "./_components/StepHeader";
 import { AppHeader, type AppTab } from "./_components/AppHeader";
+import { ResultsPlanner } from "./_components/ResultsPlanner";
 
 type Sex = "kobieta" | "mezczyzna";
 type Goal = "schudnac" | "utrzymac" | "miesnie";
@@ -34,7 +35,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-2">
-      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+      <span className="text-sm font-medium text-slate-900">
         {label}
       </span>
       {children}
@@ -43,32 +44,16 @@ function Field({
 }
 
 function inputClasses() {
-  return "h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-black dark:text-zinc-50 dark:focus:border-zinc-100 dark:focus:ring-zinc-100/10";
+  return "h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 }
 
 function pillClasses(active: boolean) {
   return [
-    "h-11 w-full rounded-xl border px-3 text-sm font-medium shadow-sm transition",
+    "h-11 w-full rounded-xl border px-3 text-sm font-semibold shadow-sm transition",
     active
-      ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-black"
-      : "border-zinc-200 bg-white text-zinc-900 hover:border-zinc-300 dark:border-zinc-800 dark:bg-black dark:text-zinc-50 dark:hover:border-zinc-700",
+      ? "border-blue-600 bg-blue-600 text-white"
+      : "border-[color:var(--border)] bg-white text-slate-900 hover:bg-slate-50",
   ].join(" ");
-}
-
-function buildBar({
-  filled,
-  filledToken,
-  total = 7,
-}: {
-  filled: number;
-  filledToken: string;
-  total?: number;
-}) {
-  const emptyToken = "\u{2B1C}\u{FE0F}"; // ⬜️
-  const clampedFilled = Math.min(total, Math.max(0, filled));
-  return (
-    filledToken.repeat(clampedFilled) + emptyToken.repeat(total - clampedFilled)
-  );
 }
 
 type PlanSnapshot = {
@@ -129,11 +114,11 @@ export default function Home() {
 
   const goalLabel =
     goal === "schudnac"
-      ? "Chcę Schudnąć"
+      ? "Odchudzanie"
       : goal === "utrzymac"
-        ? "Chcę Utrzymać"
+        ? "Utrzymanie"
         : goal === "miesnie"
-          ? "Chcę Zbudować Mięśnie"
+          ? "Budowanie mięśni"
           : "";
 
   const ageNum = numberOrNaN(age);
@@ -189,92 +174,19 @@ export default function Home() {
     Math.round((targetCalories - proteinG * 4 - fatG * 9) / 4),
   );
 
-  const proteinKcal = proteinG * 4;
-  const fatKcal = fatG * 9;
-  const carbsKcal = carbsG * 4;
-
-  const maxMacroG = Math.max(1, proteinG, fatG, carbsG);
-  const proteinBlocks = proteinG > 0 ? Math.ceil((proteinG / maxMacroG) * 7) : 0;
-  const fatBlocks = fatG > 0 ? Math.ceil((fatG / maxMacroG) * 7) : 0;
-  const carbsBlocks = carbsG > 0 ? Math.ceil((carbsG / maxMacroG) * 7) : 0;
-
-  const resultsDashboard = (
-    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-950/40">
-      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-        Dashboard Wyników
-      </p>
-
-      <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-black">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Twoje zapotrzebowanie:
-        </p>
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          {targetCalories > 0 ? `${formatInt(targetCalories)} kcal` : "-"}
-        </p>
-      </div>
-
-      <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-        Rozkład makroskładników (g):
-      </p>
-
-      <div className="mt-3 flex flex-col gap-3 text-sm">
-        <div className="flex flex-col gap-1">
-          <p className="text-zinc-900 dark:text-zinc-50">
-            <span className="font-medium">Białko:</span>{" "}
-            {proteinG > 0 ? `${formatInt(proteinG)}g` : "-"}{" "}
-            {proteinG > 0 ? `(${formatInt(proteinKcal)} kcal)` : ""}{" "}
-            {proteinG > 0 ? "\u2014" : ""}{" "}
-            <span className="font-mono tracking-widest">
-              {proteinG > 0
-                ? buildBar({
-                    filled: proteinBlocks,
-                    filledToken: "\u{1F7E6}", // 🟦
-                  })
-                : ""}
-            </span>
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <p className="text-zinc-900 dark:text-zinc-50">
-            <span className="font-medium">Tłuszcze:</span>{" "}
-            {fatG > 0 ? `${formatInt(fatG)}g` : "-"}{" "}
-            {fatG > 0 ? `(${formatInt(fatKcal)} kcal)` : ""}{" "}
-            {fatG > 0 ? "\u2014" : ""}{" "}
-            <span className="font-mono tracking-widest">
-              {fatG > 0
-                ? buildBar({
-                    filled: fatBlocks,
-                    filledToken: "\u{1F7E8}", // 🟨
-                  })
-                : ""}
-            </span>
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <p className="text-zinc-900 dark:text-zinc-50">
-            <span className="font-medium">Węglowodany:</span>{" "}
-            {carbsG > 0 ? `${formatInt(carbsG)}g` : "-"}{" "}
-            {carbsG > 0 ? `(${formatInt(carbsKcal)} kcal)` : ""}{" "}
-            {carbsG > 0 ? "\u2014" : ""}{" "}
-            <span className="font-mono tracking-widest">
-              {carbsG > 0
-                ? buildBar({
-                    filled: carbsBlocks,
-                    filledToken: "\u{1F7E9}", // 🟩
-                  })
-                : ""}
-            </span>
-          </p>
-        </div>
-      </div>
-
-      <p className="mt-4 text-xs text-zinc-600 dark:text-zinc-400">
-        To szybki szacunek na start. Możesz wrócić do kroków i doprecyzować dane.
-      </p>
-    </div>
-  );
+  const resultsPlanner =
+    goal !== "" ? (
+      <ResultsPlanner
+        goal={goal}
+        goalLabel={goalLabel}
+        activity={activity}
+        activityLabel={activityLabel}
+        calories={targetCalories}
+        proteinG={proteinG}
+        fatG={fatG}
+        carbsG={carbsG}
+      />
+    ) : null;
 
   const [history, setHistory] = React.useState<PlanSnapshot[]>([]);
 
@@ -315,7 +227,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-zinc-50 font-sans dark:bg-black">
+    <div className="flex min-h-dvh flex-col bg-transparent font-sans">
       {isFinished ? (
         <AppHeader
           tab={tab}
@@ -334,19 +246,19 @@ export default function Home() {
       )}
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-10">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-black sm:p-8">
+        <div className="rounded-3xl border border-[color:var(--border)] bg-white p-6 shadow-sm sm:p-8">
           {isFinished ? (
             <div className="flex flex-col gap-6">
               {tab === "home" ? (
                 <div className="flex flex-col gap-4">
-                  <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                  <h1 className="text-xl font-semibold tracking-tight text-slate-900">
                     Home
                   </h1>
-                  {resultsDashboard}
+                  {resultsPlanner}
                   <button
                     type="button"
                     onClick={reset}
-                    className="h-11 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm transition dark:border-zinc-800 dark:bg-black dark:text-zinc-50"
+                    className="h-11 rounded-xl border border-[color:var(--border)] bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
                   >
                     Zacznij od nowa
                   </button>
@@ -354,16 +266,16 @@ export default function Home() {
               ) : (
                 <div className="flex flex-col gap-4">
                   <div className="flex items-baseline justify-between gap-3">
-                    <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                    <h1 className="text-xl font-semibold tracking-tight text-slate-900">
                       History
                     </h1>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <p className="text-xs text-slate-500">
                       Zapisane: {history.length}
                     </p>
                   </div>
 
                   {history.length === 0 ? (
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    <p className="text-sm text-slate-600">
                       Brak zapisanych planów. Zakończ kroki, żeby dodać pierwszy.
                     </p>
                   ) : (
@@ -371,16 +283,16 @@ export default function Home() {
                       {history.map((item) => (
                         <div
                           key={item.id}
-                          className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/40"
+                          className="rounded-2xl border border-[color:var(--border)] bg-slate-50 p-4 shadow-sm"
                         >
-                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                          <p className="text-sm font-semibold text-slate-900">
                             {item.calories > 0
                               ? `${formatInt(item.calories)} kcal`
                               : "-"}{" "}
-                            · {item.goalLabel} · {item.activity}%
+                            | {item.goalLabel} | {item.activity}%
                           </p>
-                          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                            B {formatInt(item.proteinG)}g · T {formatInt(item.fatG)}g ·
+                          <p className="mt-1 text-xs text-slate-600">
+                            B {formatInt(item.proteinG)}g | T {formatInt(item.fatG)}g |
                             W {formatInt(item.carbsG)}g
                           </p>
                         </div>
@@ -395,10 +307,10 @@ export default function Home() {
           {stepIndex === 0 ? (
             <div className="flex flex-col gap-6">
               <div>
-                <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                <h1 className="text-xl font-semibold tracking-tight text-slate-900">
                   Krok 1: Twoje Dane
                 </h1>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="mt-1 text-sm text-slate-600">
                   Płeć, wiek i waga - to wystarczy na start.
                 </p>
               </div>
@@ -449,7 +361,7 @@ export default function Home() {
               </div>
 
               {!step1Valid ? (
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                <p className="text-sm text-slate-500">
                   Uzupełnij dane (wiek 10-100, waga 30-250), aby przejść dalej.
                 </p>
               ) : null}
@@ -459,11 +371,11 @@ export default function Home() {
           {stepIndex === 1 ? (
             <div className="flex flex-col gap-6">
               <div>
-                <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                <h1 className="text-xl font-semibold tracking-tight text-slate-900">
                   Krok 2: Cel
                 </h1>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                  Wybierz cel: -15%, 0% lub +10% kalorii.
+                <p className="mt-1 text-sm text-slate-600">
+                  Wybierz kierunek planu: redukcja, utrzymanie albo rozbudowa.
                 </p>
               </div>
 
@@ -476,7 +388,7 @@ export default function Home() {
                   ].join(" ")}
                   onClick={() => setGoal("schudnac")}
                 >
-                  Chcę Schudnąć
+                  Odchudzanie
                 </button>
                 <button
                   type="button"
@@ -486,7 +398,7 @@ export default function Home() {
                   ].join(" ")}
                   onClick={() => setGoal("utrzymac")}
                 >
-                  Chcę Utrzymać
+                  Utrzymanie
                 </button>
                 <button
                   type="button"
@@ -496,7 +408,7 @@ export default function Home() {
                   ].join(" ")}
                   onClick={() => setGoal("miesnie")}
                 >
-                  Chcę Zbudować Mięśnie
+                  Budowanie mięśni
                 </button>
               </div>
             </div>
@@ -505,20 +417,20 @@ export default function Home() {
           {stepIndex === 2 ? (
             <div className="flex flex-col gap-6">
               <div>
-                <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                <h1 className="text-xl font-semibold tracking-tight text-slate-900">
                   Krok 3: Aktywność
                 </h1>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="mt-1 text-sm text-slate-600">
                   Suwak od "Kanapowiec" do "Sportowiec".
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-950/40">
+              <div className="rounded-2xl border border-[color:var(--border)] bg-slate-50 p-5 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  <p className="text-sm font-medium text-slate-900">
                     {activityLabel}
                   </p>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                  <p className="text-xs text-slate-600">
                     {activity}%
                   </p>
                 </div>
@@ -534,15 +446,15 @@ export default function Home() {
                   aria-label="Poziom aktywności"
                 />
 
-                <div className="mt-3 flex justify-between text-xs text-zinc-600 dark:text-zinc-400">
+                <div className="mt-3 flex justify-between text-xs text-slate-600">
                   <span>Kanapowiec</span>
                   <span>Sportowiec</span>
                 </div>
               </div>
 
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="text-sm text-slate-500">
                 Szacunek utrzymania:{" "}
-                <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                <span className="font-medium text-slate-900">
                   {maintenanceCalories > 0
                     ? `${formatInt(maintenanceCalories)} kcal`
                     : "-"}
@@ -552,65 +464,65 @@ export default function Home() {
             </div>
           ) : null}
 
-          {stepIndex >= 1 && stepIndex <= 2 ? (
-            <div className="mt-8">{resultsDashboard}</div>
+          {stepIndex >= 1 && stepIndex <= 2 && resultsPlanner ? (
+            <div className="mt-8">{resultsPlanner}</div>
           ) : null}
 
           {stepIndex === 3 ? (
             <div className="flex flex-col gap-6">
               <div>
-                <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                <h1 className="text-xl font-semibold tracking-tight text-slate-900">
                   Wynik: Twój Plan
                 </h1>
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="mt-1 text-sm text-slate-600">
                   Orientacyjny plan na podstawie wybranych kroków.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-black">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="rounded-2xl border border-[color:var(--border)] bg-slate-50 p-5">
+                  <p className="text-sm font-medium text-slate-900">
                     Podsumowanie
                   </p>
                   <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     <div>
-                      <dt className="text-zinc-500 dark:text-zinc-400">Płeć</dt>
-                      <dd className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <dt className="text-slate-500">Płeć</dt>
+                      <dd className="font-medium text-slate-900">
                         {sexLabel || "-"}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-500 dark:text-zinc-400">Wiek</dt>
-                      <dd className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <dt className="text-slate-500">Wiek</dt>
+                      <dd className="font-medium text-slate-900">
                         {Number.isFinite(ageNum) ? `${formatInt(ageNum)} lat` : "-"}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-500 dark:text-zinc-400">Waga</dt>
-                      <dd className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <dt className="text-slate-500">Waga</dt>
+                      <dd className="font-medium text-slate-900">
                         {Number.isFinite(weightNum)
                           ? `${format1(weightNum)} kg`
                           : "-"}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-zinc-500 dark:text-zinc-400">Cel</dt>
-                      <dd className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <dt className="text-slate-500">Cel</dt>
+                      <dd className="font-medium text-slate-900">
                         {goalLabel || "-"}
                       </dd>
                     </div>
                     <div className="col-span-2">
-                      <dt className="text-zinc-500 dark:text-zinc-400">
+                      <dt className="text-slate-500">
                         Aktywność
                       </dt>
-                      <dd className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <dd className="font-medium text-slate-900">
                         {activityLabel} ({activity}%)
                       </dd>
                     </div>
                   </dl>
                 </div>
 
-                {resultsDashboard}
+                {resultsPlanner}
               </div>
             </div>
           ) : null}
@@ -620,7 +532,7 @@ export default function Home() {
               type="button"
               onClick={goBack}
               disabled={stepIndex === 0}
-              className="h-11 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-black dark:text-zinc-50"
+              className="h-11 rounded-xl border border-[color:var(--border)] bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Wstecz
             </button>
@@ -629,7 +541,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={finish}
-                className="h-11 rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+                className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Zakończ
               </button>
@@ -638,7 +550,7 @@ export default function Home() {
                 type="button"
                 onClick={goNext}
                 disabled={!canGoNext}
-                className="h-11 rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-black dark:hover:bg-white"
+                className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Dalej
               </button>
