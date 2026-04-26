@@ -5,7 +5,11 @@ import { get, ref, set } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { StepHeader } from "./_components/StepHeader";
 import { AppHeader, type AppTab } from "./_components/AppHeader";
-import { ResultsPlanner } from "./_components/ResultsPlanner";
+import {
+  ResultsMealsPanel,
+  ResultsPlanner,
+  ResultsTrainingPanel,
+} from "./_components/ResultsPlanner";
 
 type Sex = "kobieta" | "mezczyzna";
 type Goal = "schudnac" | "utrzymac" | "miesnie";
@@ -26,6 +30,19 @@ function format1(value: number) {
   return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 1 }).format(
     value,
   );
+}
+
+function formatHistoryDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function Field({
@@ -70,7 +87,7 @@ type HistoryEntry = {
   title: string;
 };
 
-const HISTORY_KEY = "calc:history";
+const HISTORY_KEY_PREFIX = "calc:history:";
 const CLIENT_ID_KEY = "calc:client-id";
 const MAX_HISTORY_ITEMS = 30;
 
@@ -111,9 +128,13 @@ function toHistoryEntry(value: unknown, fallbackId: string): HistoryEntry | null
   };
 }
 
-function loadLocalHistory(): HistoryEntry[] {
+function historyStorageKey(clientId: string) {
+  return `${HISTORY_KEY_PREFIX}${clientId}`;
+}
+
+function loadLocalHistory(clientId: string): HistoryEntry[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(historyStorageKey(clientId));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -126,9 +147,12 @@ function loadLocalHistory(): HistoryEntry[] {
   }
 }
 
-function saveLocalHistory(items: HistoryEntry[]) {
+function saveLocalHistory(clientId: string, items: HistoryEntry[]) {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)));
+    localStorage.setItem(
+      historyStorageKey(clientId),
+      JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)),
+    );
   } catch {
     // ignore
   }
@@ -249,6 +273,7 @@ export default function Home() {
     (stepIndex === 1 && step2Valid) ||
     (stepIndex === 2 && step3Valid) ||
     stepIndex >= 3;
+  const canFinish = step1Valid && step2Valid && step3Valid;
 
   const activityLabel =
     activity < 20
@@ -281,29 +306,14 @@ export default function Home() {
     Math.round((targetCalories - proteinG * 4 - fatG * 9) / 4),
   );
 
-  const resultsPlanner =
-    goal !== "" ? (
-      <ResultsPlanner
-        goal={goal}
-        goalLabel={goalLabel}
-        activity={activity}
-        activityLabel={activityLabel}
-        calories={targetCalories}
-        proteinG={proteinG}
-        fatG={fatG}
-        carbsG={carbsG}
-      />
-    ) : null;
-
   const [history, setHistory] = React.useState<HistoryEntry[]>([]);
   const clientIdRef = React.useRef<string>("");
 
   React.useEffect(() => {
-    const localHistory = loadLocalHistory();
-    setHistory(localHistory);
-
     const clientId = getOrCreateClientId();
     clientIdRef.current = clientId;
+    const localHistory = loadLocalHistory(clientId);
+    setHistory(localHistory);
 
     let cancelled = false;
 
@@ -314,7 +324,7 @@ export default function Home() {
 
         if (cloudHistory.length > 0) {
           setHistory(cloudHistory);
-          saveLocalHistory(cloudHistory);
+          saveLocalHistory(clientId, cloudHistory);
           void Promise.allSettled(
             cloudHistory.map((item) => saveCloudHistoryItem(clientId, item)),
           );
@@ -348,6 +358,8 @@ export default function Home() {
   }
 
   function finish() {
+    if (!canFinish) return;
+
     const entry: HistoryEntry = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -355,10 +367,9 @@ export default function Home() {
     };
     const next = [entry, ...history];
     setHistory(next);
-    saveLocalHistory(next);
-
     const clientId = clientIdRef.current || getOrCreateClientId();
     clientIdRef.current = clientId;
+    saveLocalHistory(clientId, next);
     void saveCloudHistoryItem(clientId, entry);
 
     setIsFinished(true);
@@ -385,41 +396,99 @@ export default function Home() {
         <StepHeader
           steps={steps}
           currentIndex={stepIndex}
-          onGoTo={(index) => setStepIndex(index)}
+          onGoTo={
+            stepIndex === steps.length - 1
+              ? undefined
+              : (index) => setStepIndex(index)
+          }
         />
       )}
 
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-10">
-        <div className="rounded-3xl border border-[color:var(--border)] bg-white p-6 shadow-sm sm:p-8">
+      <main className="mx-auto flex w-full max-w-[1500px] flex-1 flex-col px-4 py-8">
+        <div className="glass-panel rounded-[34px] p-6 sm:p-8 xl:p-10">
           {isFinished ? (
             <div className="flex flex-col gap-6">
               {tab === "home" ? (
                 <div className="flex flex-col gap-4">
                   <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-                    Home
+                    Plan
                   </h1>
-                  {resultsPlanner}
-                  <button
-                    type="button"
-                    onClick={reset}
-                    className="h-11 rounded-xl border border-[color:var(--border)] bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
-                  >
-                    Zacznij od nowa
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-                      History
-                    </h1>
-                    <p className="text-xs text-slate-500">
-                      Zapisane: {history.length}
-                    </p>
+                  {goal !== "" ? (
+                    <ResultsPlanner
+                      goal={goal}
+                      goalLabel={goalLabel}
+                      activity={activity}
+                      activityLabel={activityLabel}
+                      calories={targetCalories}
+                      proteinG={proteinG}
+                      fatG={fatG}
+                      carbsG={carbsG}
+                      showOverview={false}
+                      showTrainingAndDaily={false}
+                      showMeals={false}
+                    />
+                  ) : null}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={reset}
+                      className="h-10 rounded-xl border border-[color:var(--border)] bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+                    >
+                      Zacznij od nowa
+                    </button>
                   </div>
+                </div>
+              ) : tab === "training" ? (
+                <div className="flex flex-col gap-4">
+                  <section className="glass-panel rounded-[28px] p-5">
+                    <h1 className="text-xl font-semibold tracking-tight text-slate-950">
+                      Trening
+                    </h1>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Dzienny plan aktywności i układ sesji.
+                    </p>
+                  </section>
+                  {goal !== "" ? (
+                    <ResultsTrainingPanel
+                      goal={goal}
+                      activity={activity}
+                      calories={targetCalories}
+                    />
+                  ) : null}
+                </div>
+              ) : tab === "meals" ? (
+                <div className="flex flex-col gap-4">
+                  <section className="glass-panel rounded-[28px] p-5">
+                    <h1 className="text-xl font-semibold tracking-tight text-slate-950">
+                      Posiłki
+                    </h1>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Rozkład kalorii i prosty układ dnia pod cel.
+                    </p>
+                  </section>
+                  {goal !== "" ? (
+                    <ResultsMealsPanel
+                      goal={goal}
+                      activity={activity}
+                      calories={targetCalories}
+                    />
+                  ) : null}
+                </div>
+              ) : tab === "history" ? (
+                <div className="flex flex-col gap-4">
+                  <section className="glass-panel rounded-[28px] p-5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <h1 className="text-xl font-semibold tracking-tight text-slate-950">
+                        Historia
+                      </h1>
+                      <p className="text-xs text-slate-500">
+                        Zapisane: {history.length}
+                      </p>
+                    </div>
+                  </section>
 
                   {history.length === 0 ? (
-                    <p className="text-sm text-slate-600">
+                    <p className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-600">
                       Brak zapisanych planów. Zakończ kroki, żeby dodać pierwszy.
                     </p>
                   ) : (
@@ -427,17 +496,22 @@ export default function Home() {
                       {history.map((item) => (
                         <div
                           key={item.id}
-                          className="rounded-2xl border border-[color:var(--border)] bg-slate-50 p-4 shadow-sm"
+                          className="glass-panel rounded-2xl p-4"
                         >
-                          <p className="text-sm font-semibold text-slate-900">
-                            {item.title}
-                          </p>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                            <p className="text-sm font-semibold text-slate-900">
+                              {item.title}
+                            </p>
+                            <p className="shrink-0 text-xs font-medium text-slate-500">
+                              {formatHistoryDate(item.createdAt)}
+                            </p>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
             </div>
           ) : (
             <>
@@ -603,23 +677,19 @@ export default function Home() {
             </div>
           ) : null}
 
-          {stepIndex >= 1 && stepIndex <= 2 && resultsPlanner ? (
-            <div className="mt-8">{resultsPlanner}</div>
-          ) : null}
-
           {stepIndex === 3 ? (
             <div className="flex flex-col gap-6">
               <div>
                 <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-                  Wynik: Twój Plan
+                  Wynik i podsumowanie
                 </h1>
                 <p className="mt-1 text-sm text-slate-600">
-                  Orientacyjny plan na podstawie wybranych kroków.
+                  Najważniejsze dane planu przed przejściem do sekcji szczegółowych.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                <div className="rounded-2xl border border-[color:var(--border)] bg-slate-50 p-5">
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]">
+                <div className="glass-panel rounded-[28px] p-5">
                   <p className="text-sm font-medium text-slate-900">
                     Podsumowanie
                   </p>
@@ -661,7 +731,23 @@ export default function Home() {
                   </dl>
                 </div>
 
-                {resultsPlanner}
+                <div className="min-w-0">
+                  {goal !== "" ? (
+                    <ResultsPlanner
+                      goal={goal}
+                      goalLabel={goalLabel}
+                      activity={activity}
+                      activityLabel={activityLabel}
+                      calories={targetCalories}
+                      proteinG={proteinG}
+                      fatG={fatG}
+                      carbsG={carbsG}
+                      showOverview={false}
+                      showTrainingAndDaily={false}
+                      showMeals={false}
+                    />
+                  ) : null}
+                </div>
               </div>
             </div>
           ) : null}
@@ -680,6 +766,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={finish}
+                disabled={!canFinish}
                 className="h-11 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Zakończ

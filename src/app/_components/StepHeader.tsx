@@ -30,7 +30,7 @@ export function StepHeader({
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[color:var(--border)] bg-white/95 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-4">
+      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold tracking-tight text-slate-900">
@@ -39,14 +39,14 @@ export function StepHeader({
             <p className="text-xs text-slate-500">Uzupełnij kroki po kolei</p>
           </div>
 
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+          <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
             {safeCurrentIndex + 1} / {steps.length}
           </span>
         </div>
 
-        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-2 overflow-hidden rounded-lg bg-slate-100">
           <div
-            className="h-full rounded-full bg-blue-600 transition-[width] duration-300"
+            className="h-full rounded-lg bg-blue-600 transition-[width] duration-300"
             style={{ width: `${progress * 100}%` }}
           />
         </div>
@@ -72,7 +72,7 @@ export function StepHeader({
             const content = (
               <span
                 className={[
-                  "flex min-h-16 items-center gap-3 rounded-2xl border px-3 py-3 text-left transition",
+                  "flex min-h-16 items-center gap-3 rounded-xl border px-3 py-3 text-left transition",
                   itemClasses,
                 ].join(" ")}
               >
@@ -102,7 +102,7 @@ export function StepHeader({
                   <button
                     type="button"
                     onClick={() => onGoTo?.(index)}
-                    className="w-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                    className="w-full rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                     aria-current={isCurrent ? "step" : undefined}
                   >
                     {content}
