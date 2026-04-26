@@ -64,34 +64,69 @@ function pillClasses(active: boolean) {
   ].join(" ");
 }
 
-type PlanSnapshot = {
+type HistoryEntry = {
   id: string;
   createdAt: string;
-  calories: number;
-  proteinG: number;
-  fatG: number;
-  carbsG: number;
-  goalLabel: string;
-  activity: number;
+  title: string;
 };
 
 const HISTORY_KEY = "calc:history";
 const CLIENT_ID_KEY = "calc:client-id";
 const MAX_HISTORY_ITEMS = 30;
 
-function loadLocalHistory(): PlanSnapshot[] {
+function buildHistoryTitle(calories: number, goalLabel: string, activity: number) {
+  const caloriesLabel = calories > 0 ? `${formatInt(calories)} kcal` : "-";
+  return `${caloriesLabel} | ${goalLabel || "-"} | ${activity}%`;
+}
+
+function toHistoryEntry(value: unknown, fallbackId: string): HistoryEntry | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const id =
+    typeof item.id === "string" && item.id.length > 0 ? item.id : fallbackId;
+  const createdAt =
+    typeof item.createdAt === "string"
+      ? item.createdAt
+      : new Date(0).toISOString();
+
+  if (typeof item.title === "string" && item.title.trim().length > 0) {
+    return {
+      id,
+      createdAt,
+      title: item.title,
+    };
+  }
+
+  const calories = Math.round(toFiniteNumber(item.calories));
+  const goalLabel =
+    typeof item.goalLabel === "string" && item.goalLabel.length > 0
+      ? item.goalLabel
+      : "-";
+  const activity = Math.round(toFiniteNumber(item.activity));
+
+  return {
+    id,
+    createdAt,
+    title: buildHistoryTitle(calories, goalLabel, activity),
+  };
+}
+
+function loadLocalHistory(): HistoryEntry[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed as PlanSnapshot[];
+    return parsed
+      .map((item, index) => toHistoryEntry(item, `local-${index}`))
+      .filter((item): item is HistoryEntry => item !== null)
+      .slice(0, MAX_HISTORY_ITEMS);
   } catch {
     return [];
   }
 }
 
-function saveLocalHistory(items: PlanSnapshot[]) {
+function saveLocalHistory(items: HistoryEntry[]) {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)));
   } catch {
@@ -116,27 +151,6 @@ function toFiniteNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function toPlanSnapshot(value: unknown, fallbackId: string): PlanSnapshot | null {
-  if (!value || typeof value !== "object") return null;
-  const item = value as Record<string, unknown>;
-  const id =
-    typeof item.id === "string" && item.id.length > 0 ? item.id : fallbackId;
-
-  return {
-    id,
-    createdAt:
-      typeof item.createdAt === "string"
-        ? item.createdAt
-        : new Date(0).toISOString(),
-    calories: Math.round(toFiniteNumber(item.calories)),
-    proteinG: Math.round(toFiniteNumber(item.proteinG)),
-    fatG: Math.round(toFiniteNumber(item.fatG)),
-    carbsG: Math.round(toFiniteNumber(item.carbsG)),
-    goalLabel: typeof item.goalLabel === "string" ? item.goalLabel : "-",
-    activity: Math.round(toFiniteNumber(item.activity)),
-  };
-}
-
 function plansRef(clientId: string) {
   return ref(db, `clients/${clientId}/plans`);
 }
@@ -145,17 +159,17 @@ function historyRef(clientId: string) {
   return ref(db, `history/${clientId}/plans`);
 }
 
-function parsePlansSnapshot(snapshotValue: unknown): PlanSnapshot[] {
+function parsePlansSnapshot(snapshotValue: unknown): HistoryEntry[] {
   if (!snapshotValue || typeof snapshotValue !== "object") return [];
 
   return Object.entries(snapshotValue as Record<string, unknown>)
-    .map(([id, value]) => toPlanSnapshot(value, id))
-    .filter((item): item is PlanSnapshot => item !== null)
+    .map(([id, value]) => toHistoryEntry(value, id))
+    .filter((item): item is HistoryEntry => item !== null)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, MAX_HISTORY_ITEMS);
 }
 
-async function loadCloudHistory(clientId: string): Promise<PlanSnapshot[]> {
+async function loadCloudHistory(clientId: string): Promise<HistoryEntry[]> {
   const historySnapshot = await get(historyRef(clientId));
   if (historySnapshot.exists()) {
     const parsed = parsePlansSnapshot(historySnapshot.val() as unknown);
@@ -167,10 +181,16 @@ async function loadCloudHistory(clientId: string): Promise<PlanSnapshot[]> {
   return parsePlansSnapshot(plansSnapshot.val() as unknown);
 }
 
-async function saveCloudHistoryItem(clientId: string, item: PlanSnapshot) {
+async function saveCloudHistoryItem(clientId: string, item: HistoryEntry) {
+  const cloudPayload: HistoryEntry = {
+    id: item.id,
+    createdAt: item.createdAt,
+    title: item.title,
+  };
+
   await Promise.allSettled([
-    set(ref(db, `clients/${clientId}/plans/${item.id}`), item),
-    set(ref(db, `history/${clientId}/plans/${item.id}`), item),
+    set(ref(db, `clients/${clientId}/plans/${item.id}`), cloudPayload),
+    set(ref(db, `history/${clientId}/plans/${item.id}`), cloudPayload),
   ]);
 }
 
@@ -275,7 +295,7 @@ export default function Home() {
       />
     ) : null;
 
-  const [history, setHistory] = React.useState<PlanSnapshot[]>([]);
+  const [history, setHistory] = React.useState<HistoryEntry[]>([]);
   const clientIdRef = React.useRef<string>("");
 
   React.useEffect(() => {
@@ -295,6 +315,9 @@ export default function Home() {
         if (cloudHistory.length > 0) {
           setHistory(cloudHistory);
           saveLocalHistory(cloudHistory);
+          void Promise.allSettled(
+            cloudHistory.map((item) => saveCloudHistoryItem(clientId, item)),
+          );
           return;
         }
 
@@ -325,23 +348,18 @@ export default function Home() {
   }
 
   function finish() {
-    const snapshot: PlanSnapshot = {
+    const entry: HistoryEntry = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
-      calories: targetCalories,
-      proteinG,
-      fatG,
-      carbsG,
-      goalLabel: goalLabel || "-",
-      activity,
+      title: buildHistoryTitle(targetCalories, goalLabel || "-", activity),
     };
-    const next = [snapshot, ...history];
+    const next = [entry, ...history];
     setHistory(next);
     saveLocalHistory(next);
 
     const clientId = clientIdRef.current || getOrCreateClientId();
     clientIdRef.current = clientId;
-    void saveCloudHistoryItem(clientId, snapshot);
+    void saveCloudHistoryItem(clientId, entry);
 
     setIsFinished(true);
     setTab("home");
@@ -412,14 +430,7 @@ export default function Home() {
                           className="rounded-2xl border border-[color:var(--border)] bg-slate-50 p-4 shadow-sm"
                         >
                           <p className="text-sm font-semibold text-slate-900">
-                            {item.calories > 0
-                              ? `${formatInt(item.calories)} kcal`
-                              : "-"}{" "}
-                            | {item.goalLabel} | {item.activity}%
-                          </p>
-                          <p className="mt-1 text-xs text-slate-600">
-                            B {formatInt(item.proteinG)}g | T {formatInt(item.fatG)}g |
-                            W {formatInt(item.carbsG)}g
+                            {item.title}
                           </p>
                         </div>
                       ))}
