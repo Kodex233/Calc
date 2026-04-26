@@ -1,8 +1,6 @@
 ﻿"use client";
 
 import * as React from "react";
-import { collection, doc, getDocs, limit, orderBy, query, setDoc } from "firebase/firestore";
-import { db, initFirebaseAnalytics } from "@/lib/firebase";
 import { StepHeader } from "./_components/StepHeader";
 import { AppHeader, type AppTab } from "./_components/AppHeader";
 import { ResultsPlanner } from "./_components/ResultsPlanner";
@@ -75,13 +73,9 @@ type PlanSnapshot = {
   activity: number;
 };
 
-const HISTORY_KEY = "calc:history";
-const CLIENT_ID_KEY = "calc:client-id";
-const MAX_HISTORY_ITEMS = 30;
-
-function loadLocalHistory(): PlanSnapshot[] {
+function loadHistory(): PlanSnapshot[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem("calc:history");
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -91,68 +85,12 @@ function loadLocalHistory(): PlanSnapshot[] {
   }
 }
 
-function saveLocalHistory(items: PlanSnapshot[]) {
+function saveHistory(items: PlanSnapshot[]) {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)));
+    localStorage.setItem("calc:history", JSON.stringify(items.slice(0, 30)));
   } catch {
     // ignore
   }
-}
-
-function getOrCreateClientId() {
-  try {
-    const saved = localStorage.getItem(CLIENT_ID_KEY);
-    if (saved) return saved;
-    const created = crypto.randomUUID();
-    localStorage.setItem(CLIENT_ID_KEY, created);
-    return created;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
-
-function toFiniteNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function toPlanSnapshot(value: unknown, fallbackId: string): PlanSnapshot | null {
-  if (!value || typeof value !== "object") return null;
-  const item = value as Record<string, unknown>;
-  const id =
-    typeof item.id === "string" && item.id.length > 0 ? item.id : fallbackId;
-
-  return {
-    id,
-    createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date(0).toISOString(),
-    calories: Math.round(toFiniteNumber(item.calories)),
-    proteinG: Math.round(toFiniteNumber(item.proteinG)),
-    fatG: Math.round(toFiniteNumber(item.fatG)),
-    carbsG: Math.round(toFiniteNumber(item.carbsG)),
-    goalLabel: typeof item.goalLabel === "string" ? item.goalLabel : "-",
-    activity: Math.round(toFiniteNumber(item.activity)),
-  };
-}
-
-function plansCollection(clientId: string) {
-  return collection(db, "clients", clientId, "plans");
-}
-
-async function loadCloudHistory(clientId: string): Promise<PlanSnapshot[]> {
-  const snapshot = await getDocs(
-    query(
-      plansCollection(clientId),
-      orderBy("createdAt", "desc"),
-      limit(MAX_HISTORY_ITEMS),
-    ),
-  );
-
-  return snapshot.docs
-    .map((entry) => toPlanSnapshot(entry.data(), entry.id))
-    .filter((item): item is PlanSnapshot => item !== null);
-}
-
-async function saveCloudHistoryItem(clientId: string, item: PlanSnapshot) {
-  await setDoc(doc(plansCollection(clientId), item.id), item);
 }
 
 export default function Home() {
@@ -257,45 +195,9 @@ export default function Home() {
     ) : null;
 
   const [history, setHistory] = React.useState<PlanSnapshot[]>([]);
-  const clientIdRef = React.useRef<string>("");
 
   React.useEffect(() => {
-    const localHistory = loadLocalHistory();
-    setHistory(localHistory);
-
-    const clientId = getOrCreateClientId();
-    clientIdRef.current = clientId;
-
-    void initFirebaseAnalytics();
-
-    let cancelled = false;
-
-    async function syncHistoryFromCloud() {
-      try {
-        const cloudHistory = await loadCloudHistory(clientId);
-        if (cancelled) return;
-
-        if (cloudHistory.length > 0) {
-          setHistory(cloudHistory);
-          saveLocalHistory(cloudHistory);
-          return;
-        }
-
-        if (localHistory.length > 0) {
-          await Promise.all(
-            localHistory.map((item) => saveCloudHistoryItem(clientId, item)),
-          );
-        }
-      } catch {
-        // keep local fallback
-      }
-    }
-
-    void syncHistoryFromCloud();
-
-    return () => {
-      cancelled = true;
-    };
+    setHistory(loadHistory());
   }, []);
 
   function goNext() {
@@ -320,11 +222,7 @@ export default function Home() {
     };
     const next = [snapshot, ...history];
     setHistory(next);
-    saveLocalHistory(next);
-
-    const clientId = clientIdRef.current || getOrCreateClientId();
-    clientIdRef.current = clientId;
-    void saveCloudHistoryItem(clientId, snapshot);
+    saveHistory(next);
 
     setIsFinished(true);
     setTab("home");
@@ -532,7 +430,7 @@ export default function Home() {
                   Krok 3: Aktywność
                 </h1>
                 <p className="mt-1 text-sm text-slate-600">
-                  Suwak od &quot;Kanapowiec&quot; do &quot;Sportowiec&quot;.
+                  Suwak od "Kanapowiec" do "Sportowiec".
                 </p>
               </div>
 
