@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import * as React from "react";
+import { get, ref, set } from "firebase/database";
+import { db } from "@/lib/firebase";
 import { StepHeader } from "./_components/StepHeader";
 import { AppHeader, type AppTab } from "./_components/AppHeader";
 import { ResultsPlanner } from "./_components/ResultsPlanner";
@@ -73,9 +75,13 @@ type PlanSnapshot = {
   activity: number;
 };
 
-function loadHistory(): PlanSnapshot[] {
+const HISTORY_KEY = "calc:history";
+const CLIENT_ID_KEY = "calc:client-id";
+const MAX_HISTORY_ITEMS = 30;
+
+function loadLocalHistory(): PlanSnapshot[] {
   try {
-    const raw = localStorage.getItem("calc:history");
+    const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -85,12 +91,87 @@ function loadHistory(): PlanSnapshot[] {
   }
 }
 
-function saveHistory(items: PlanSnapshot[]) {
+function saveLocalHistory(items: PlanSnapshot[]) {
   try {
-    localStorage.setItem("calc:history", JSON.stringify(items.slice(0, 30)));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY_ITEMS)));
   } catch {
     // ignore
   }
+}
+
+function getOrCreateClientId() {
+  try {
+    const saved = localStorage.getItem(CLIENT_ID_KEY);
+    if (saved) return saved;
+
+    const created = crypto.randomUUID();
+    localStorage.setItem(CLIENT_ID_KEY, created);
+    return created;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
+function toFiniteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function toPlanSnapshot(value: unknown, fallbackId: string): PlanSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const id =
+    typeof item.id === "string" && item.id.length > 0 ? item.id : fallbackId;
+
+  return {
+    id,
+    createdAt:
+      typeof item.createdAt === "string"
+        ? item.createdAt
+        : new Date(0).toISOString(),
+    calories: Math.round(toFiniteNumber(item.calories)),
+    proteinG: Math.round(toFiniteNumber(item.proteinG)),
+    fatG: Math.round(toFiniteNumber(item.fatG)),
+    carbsG: Math.round(toFiniteNumber(item.carbsG)),
+    goalLabel: typeof item.goalLabel === "string" ? item.goalLabel : "-",
+    activity: Math.round(toFiniteNumber(item.activity)),
+  };
+}
+
+function plansRef(clientId: string) {
+  return ref(db, `clients/${clientId}/plans`);
+}
+
+function historyRef(clientId: string) {
+  return ref(db, `history/${clientId}/plans`);
+}
+
+function parsePlansSnapshot(snapshotValue: unknown): PlanSnapshot[] {
+  if (!snapshotValue || typeof snapshotValue !== "object") return [];
+
+  return Object.entries(snapshotValue as Record<string, unknown>)
+    .map(([id, value]) => toPlanSnapshot(value, id))
+    .filter((item): item is PlanSnapshot => item !== null)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, MAX_HISTORY_ITEMS);
+}
+
+async function loadCloudHistory(clientId: string): Promise<PlanSnapshot[]> {
+  const historySnapshot = await get(historyRef(clientId));
+  if (historySnapshot.exists()) {
+    const parsed = parsePlansSnapshot(historySnapshot.val() as unknown);
+    if (parsed.length > 0) return parsed;
+  }
+
+  const plansSnapshot = await get(plansRef(clientId));
+  if (!plansSnapshot.exists()) return [];
+  return parsePlansSnapshot(plansSnapshot.val() as unknown);
+}
+
+async function saveCloudHistoryItem(clientId: string, item: PlanSnapshot) {
+  await Promise.allSettled([
+    set(ref(db, `clients/${clientId}/plans/${item.id}`), item),
+    set(ref(db, `history/${clientId}/plans/${item.id}`), item),
+  ]);
 }
 
 export default function Home() {
@@ -195,9 +276,43 @@ export default function Home() {
     ) : null;
 
   const [history, setHistory] = React.useState<PlanSnapshot[]>([]);
+  const clientIdRef = React.useRef<string>("");
 
   React.useEffect(() => {
-    setHistory(loadHistory());
+    const localHistory = loadLocalHistory();
+    setHistory(localHistory);
+
+    const clientId = getOrCreateClientId();
+    clientIdRef.current = clientId;
+
+    let cancelled = false;
+
+    async function syncHistoryFromCloud() {
+      try {
+        const cloudHistory = await loadCloudHistory(clientId);
+        if (cancelled) return;
+
+        if (cloudHistory.length > 0) {
+          setHistory(cloudHistory);
+          saveLocalHistory(cloudHistory);
+          return;
+        }
+
+        if (localHistory.length > 0) {
+          await Promise.all(
+            localHistory.map((item) => saveCloudHistoryItem(clientId, item)),
+          );
+        }
+      } catch {
+        // keep local fallback
+      }
+    }
+
+    void syncHistoryFromCloud();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function goNext() {
@@ -222,7 +337,11 @@ export default function Home() {
     };
     const next = [snapshot, ...history];
     setHistory(next);
-    saveHistory(next);
+    saveLocalHistory(next);
+
+    const clientId = clientIdRef.current || getOrCreateClientId();
+    clientIdRef.current = clientId;
+    void saveCloudHistoryItem(clientId, snapshot);
 
     setIsFinished(true);
     setTab("home");
@@ -430,7 +549,7 @@ export default function Home() {
                   Krok 3: Aktywność
                 </h1>
                 <p className="mt-1 text-sm text-slate-600">
-                  Suwak od "Kanapowiec" do "Sportowiec".
+                  Suwak od &quot;Kanapowiec&quot; do &quot;Sportowiec&quot;.
                 </p>
               </div>
 
