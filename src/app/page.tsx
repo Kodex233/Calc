@@ -28,18 +28,24 @@ function format1(value: number) {
 
 function Field({
   label,
+  htmlFor,
   children,
 }: {
   label: string;
+  htmlFor?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-2">
-      <span className="text-sm font-medium text-slate-900">
-        {label}
-      </span>
+    <div className="flex flex-col gap-2">
+      {htmlFor ? (
+        <label className="text-sm font-medium text-slate-900" htmlFor={htmlFor}>
+          {label}
+        </label>
+      ) : (
+        <span className="text-sm font-medium text-slate-900">{label}</span>
+      )}
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -335,8 +341,9 @@ export default function Home() {
                   </div>
                 </Field>
 
-                <Field label="Wiek">
+                <Field label="Wiek" htmlFor="age">
                   <input
+                    id="age"
                     className={inputClasses()}
                     inputMode="numeric"
                     value={age}
@@ -346,8 +353,9 @@ export default function Home() {
                   />
                 </Field>
 
-                <Field label="Waga (kg)">
+                <Field label="Waga (kg)" htmlFor="weight">
                   <input
+                    id="weight"
                     className={inputClasses()}
                     inputMode="decimal"
                     value={weight}
