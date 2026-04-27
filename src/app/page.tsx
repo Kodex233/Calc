@@ -5,10 +5,9 @@ import { get, ref, set } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { StepHeader } from "./_components/StepHeader";
 import { AppHeader, type AppTab } from "./_components/AppHeader";
+import { DailyIntakeTracker } from "./_components/DailyIntakeTracker";
 import {
-  ResultsMealsPanel,
   ResultsPlanner,
-  ResultsTrainingPanel,
 } from "./_components/ResultsPlanner";
 
 type Sex = "kobieta" | "mezczyzna";
@@ -85,11 +84,18 @@ type HistoryEntry = {
   id: string;
   createdAt: string;
   title: string;
+  calories: number;
+  proteinG: number;
+  fatG: number;
+  carbsG: number;
+  goalLabel: string;
+  activity: number;
 };
 
 const HISTORY_KEY_PREFIX = "calc:history:";
+const INTAKE_KEY_PREFIX = "calc:intake:";
 const CLIENT_ID_KEY = "calc:client-id";
-const MAX_HISTORY_ITEMS = 30;
+const MAX_HISTORY_ITEMS = 2;
 
 function buildHistoryTitle(calories: number, goalLabel: string, activity: number) {
   const caloriesLabel = calories > 0 ? `${formatInt(calories)} kcal` : "-";
@@ -105,26 +111,31 @@ function toHistoryEntry(value: unknown, fallbackId: string): HistoryEntry | null
     typeof item.createdAt === "string"
       ? item.createdAt
       : new Date(0).toISOString();
-
-  if (typeof item.title === "string" && item.title.trim().length > 0) {
-    return {
-      id,
-      createdAt,
-      title: item.title,
-    };
-  }
-
   const calories = Math.round(toFiniteNumber(item.calories));
+  const proteinG = Math.round(toFiniteNumber(item.proteinG));
+  const fatG = Math.round(toFiniteNumber(item.fatG));
+  const carbsG = Math.round(toFiniteNumber(item.carbsG));
   const goalLabel =
     typeof item.goalLabel === "string" && item.goalLabel.length > 0
       ? item.goalLabel
       : "-";
   const activity = Math.round(toFiniteNumber(item.activity));
 
+  const title =
+    typeof item.title === "string" && item.title.trim().length > 0
+      ? item.title
+      : buildHistoryTitle(calories, goalLabel, activity);
+
   return {
     id,
     createdAt,
-    title: buildHistoryTitle(calories, goalLabel, activity),
+    title,
+    calories,
+    proteinG,
+    fatG,
+    carbsG,
+    goalLabel,
+    activity,
   };
 }
 
@@ -205,16 +216,20 @@ async function loadCloudHistory(clientId: string): Promise<HistoryEntry[]> {
   return parsePlansSnapshot(plansSnapshot.val() as unknown);
 }
 
-async function saveCloudHistoryItem(clientId: string, item: HistoryEntry) {
-  const cloudPayload: HistoryEntry = {
-    id: item.id,
-    createdAt: item.createdAt,
-    title: item.title,
-  };
+function toCloudHistoryPayload(items: HistoryEntry[]) {
+  return items
+    .slice(0, MAX_HISTORY_ITEMS)
+    .reduce<Record<string, HistoryEntry>>((acc, item) => {
+      acc[item.id] = item;
+      return acc;
+    }, {});
+}
 
+async function saveCloudHistory(clientId: string, items: HistoryEntry[]) {
+  const payload = toCloudHistoryPayload(items);
   await Promise.allSettled([
-    set(ref(db, `clients/${clientId}/plans/${item.id}`), cloudPayload),
-    set(ref(db, `history/${clientId}/plans/${item.id}`), cloudPayload),
+    set(historyRef(clientId), payload),
+    set(plansRef(clientId), payload),
   ]);
 }
 
@@ -305,12 +320,19 @@ export default function Home() {
     0,
     Math.round((targetCalories - proteinG * 4 - fatG * 9) / 4),
   );
+  const totalMacroCalories = Math.max(1, proteinG * 4 + fatG * 9 + carbsG * 4);
+  const proteinPercent = Math.round((proteinG * 4 / totalMacroCalories) * 100);
+  const fatPercent = Math.round((fatG * 9 / totalMacroCalories) * 100);
+  const carbsPercent = Math.max(0, 100 - proteinPercent - fatPercent);
 
   const [history, setHistory] = React.useState<HistoryEntry[]>([]);
+  const [clientId, setClientId] = React.useState("");
   const clientIdRef = React.useRef<string>("");
+  const intakeStorageKey = `${INTAKE_KEY_PREFIX}${clientId || "local"}`;
 
   React.useEffect(() => {
     const clientId = getOrCreateClientId();
+    setClientId(clientId);
     clientIdRef.current = clientId;
     const localHistory = loadLocalHistory(clientId);
     setHistory(localHistory);
@@ -325,16 +347,12 @@ export default function Home() {
         if (cloudHistory.length > 0) {
           setHistory(cloudHistory);
           saveLocalHistory(clientId, cloudHistory);
-          void Promise.allSettled(
-            cloudHistory.map((item) => saveCloudHistoryItem(clientId, item)),
-          );
+          void saveCloudHistory(clientId, cloudHistory);
           return;
         }
 
         if (localHistory.length > 0) {
-          await Promise.all(
-            localHistory.map((item) => saveCloudHistoryItem(clientId, item)),
-          );
+          await saveCloudHistory(clientId, localHistory);
         }
       } catch {
         // keep local fallback
@@ -364,13 +382,19 @@ export default function Home() {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
       title: buildHistoryTitle(targetCalories, goalLabel || "-", activity),
+      calories: targetCalories,
+      proteinG,
+      fatG,
+      carbsG,
+      goalLabel: goalLabel || "-",
+      activity,
     };
-    const next = [entry, ...history];
+    const next = [entry, ...history].slice(0, MAX_HISTORY_ITEMS);
     setHistory(next);
     const clientId = clientIdRef.current || getOrCreateClientId();
     clientIdRef.current = clientId;
     saveLocalHistory(clientId, next);
-    void saveCloudHistoryItem(clientId, entry);
+    void saveCloudHistory(clientId, next);
 
     setIsFinished(true);
     setTab("home");
@@ -410,9 +434,18 @@ export default function Home() {
             <div className="flex flex-col gap-6">
               {tab === "home" ? (
                 <div className="flex flex-col gap-4">
-                  <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-                    Plan
-                  </h1>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                      Plan
+                    </h1>
+                    <button
+                      type="button"
+                      onClick={reset}
+                      className="h-10 rounded-xl border border-[color:var(--border)] bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+                    >
+                      Zacznij od nowa
+                    </button>
+                  </div>
                   {goal !== "" ? (
                     <ResultsPlanner
                       goal={goal}
@@ -428,85 +461,93 @@ export default function Home() {
                       showMeals={false}
                     />
                   ) : null}
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={reset}
-                      className="h-10 rounded-xl border border-[color:var(--border)] bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
-                    >
-                      Zacznij od nowa
-                    </button>
-                  </div>
                 </div>
               ) : tab === "training" ? (
                 <div className="flex flex-col gap-4">
-                  <section className="glass-panel rounded-[28px] p-5">
-                    <h1 className="text-xl font-semibold tracking-tight text-slate-950">
-                      Trening
-                    </h1>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Dzienny plan aktywności i układ sesji.
-                    </p>
-                  </section>
                   {goal !== "" ? (
-                    <ResultsTrainingPanel
-                      goal={goal}
+                    <DailyIntakeTracker
+                      storageKey={intakeStorageKey}
+                      targetCalories={targetCalories}
+                      targetProteinG={proteinG}
+                      targetFatG={fatG}
+                      targetCarbsG={carbsG}
                       activity={activity}
-                      calories={targetCalories}
+                      weightKg={Number.isFinite(weightNum) ? weightNum : 0}
+                      showMealEntry={false}
                     />
                   ) : null}
                 </div>
               ) : tab === "meals" ? (
                 <div className="flex flex-col gap-4">
-                  <section className="glass-panel rounded-[28px] p-5">
-                    <h1 className="text-xl font-semibold tracking-tight text-slate-950">
-                      Posiłki
-                    </h1>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Rozkład kalorii i prosty układ dnia pod cel.
-                    </p>
-                  </section>
                   {goal !== "" ? (
-                    <ResultsMealsPanel
-                      goal={goal}
+                    <DailyIntakeTracker
+                      storageKey={intakeStorageKey}
+                      targetCalories={targetCalories}
+                      targetProteinG={proteinG}
+                      targetFatG={fatG}
+                      targetCarbsG={carbsG}
                       activity={activity}
-                      calories={targetCalories}
+                      weightKg={Number.isFinite(weightNum) ? weightNum : 0}
+                      showTrainingControls={false}
                     />
                   ) : null}
                 </div>
               ) : tab === "history" ? (
                 <div className="flex flex-col gap-4">
-                  <section className="glass-panel rounded-[28px] p-5">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <h1 className="text-xl font-semibold tracking-tight text-slate-950">
-                        Historia
-                      </h1>
-                      <p className="text-xs text-slate-500">
-                        Zapisane: {history.length}
-                      </p>
-                    </div>
-                  </section>
+                  <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                    Historia
+                  </h1>
 
                   {history.length === 0 ? (
-                    <p className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-600">
-                      Brak zapisanych planów. Zakończ kroki, żeby dodać pierwszy.
-                    </p>
+                    <section className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/85 p-6 text-center shadow-sm">
+                      Brak wpisow
+                    </section>
                   ) : (
                     <div className="grid grid-cols-1 gap-3">
-                      {history.map((item) => (
-                        <div
+                      {history.slice(0, MAX_HISTORY_ITEMS).map((item, index) => (
+                        <article
                           key={item.id}
-                          className="glass-panel rounded-2xl p-4"
+                          className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm"
                         >
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                            <p className="text-sm font-semibold text-slate-900">
-                              {item.title}
-                            </p>
-                            <p className="shrink-0 text-xs font-medium text-slate-500">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                              Wpis {index + 1}
+                            </span>
+                            <p className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
                               {formatHistoryDate(item.createdAt)}
                             </p>
                           </div>
-                        </div>
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <div className="rounded-xl border border-slate-200 bg-white p-3">
+                              <p className="text-xs font-semibold text-slate-600">Kalorie</p>
+                              <p className="mt-1 text-lg font-bold text-slate-950">
+                                {item.calories > 0 ? formatInt(item.calories) : "-"}
+                              </p>
+                              <p className="text-xs text-slate-500">kcal</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-3">
+                              <p className="text-xs font-semibold text-slate-600">Bialko</p>
+                              <p className="mt-1 text-lg font-bold text-slate-950">
+                                {item.proteinG > 0 ? formatInt(item.proteinG) : "-"}
+                              </p>
+                              <p className="text-xs text-slate-500">g</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-3">
+                              <p className="text-xs font-semibold text-slate-600">Tluszcze</p>
+                              <p className="mt-1 text-lg font-bold text-slate-950">
+                                {item.fatG > 0 ? formatInt(item.fatG) : "-"}
+                              </p>
+                              <p className="text-xs text-slate-500">g</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-3">
+                              <p className="text-xs font-semibold text-slate-600">Weglowodany</p>
+                              <p className="mt-1 text-lg font-bold text-slate-950">
+                                {item.carbsG > 0 ? formatInt(item.carbsG) : "-"}
+                              </p>
+                              <p className="text-xs text-slate-500">g</p>
+                            </div>
+                          </div>
+                        </article>
                       ))}
                     </div>
                   )}
@@ -678,77 +719,54 @@ export default function Home() {
           ) : null}
 
           {stepIndex === 3 ? (
-            <div className="flex flex-col gap-6">
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-                  Wynik i podsumowanie
-                </h1>
-                <p className="mt-1 text-sm text-slate-600">
-                  Najważniejsze dane planu przed przejściem do sekcji szczegółowych.
+            <div className="flex flex-col gap-3">
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                Twój plan
+              </h1>
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#0A84FF]">
+                  Dzienny cel
                 </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]">
-                <div className="glass-panel rounded-[28px] p-5">
-                  <p className="text-sm font-medium text-slate-900">
-                    Podsumowanie
+                <div className="mt-2 flex items-end gap-2">
+                  <p className="text-4xl font-bold leading-none tracking-tight text-slate-950">
+                    {targetCalories > 0 ? formatInt(targetCalories) : "-"}
                   </p>
-                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div>
-                      <dt className="text-slate-500">Płeć</dt>
-                      <dd className="font-medium text-slate-900">
-                        {sexLabel || "-"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Wiek</dt>
-                      <dd className="font-medium text-slate-900">
-                        {Number.isFinite(ageNum) ? `${formatInt(ageNum)} lat` : "-"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Waga</dt>
-                      <dd className="font-medium text-slate-900">
-                        {Number.isFinite(weightNum)
-                          ? `${format1(weightNum)} kg`
-                          : "-"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-500">Cel</dt>
-                      <dd className="font-medium text-slate-900">
-                        {goalLabel || "-"}
-                      </dd>
-                    </div>
-                    <div className="col-span-2">
-                      <dt className="text-slate-500">
-                        Aktywność
-                      </dt>
-                      <dd className="font-medium text-slate-900">
-                        {activityLabel} ({activity}%)
-                      </dd>
-                    </div>
-                  </dl>
+                  <p className="pb-1 text-sm font-semibold text-slate-500">kcal</p>
                 </div>
 
-                <div className="min-w-0">
-                  {goal !== "" ? (
-                    <ResultsPlanner
-                      goal={goal}
-                      goalLabel={goalLabel}
-                      activity={activity}
-                      activityLabel={activityLabel}
-                      calories={targetCalories}
-                      proteinG={proteinG}
-                      fatG={fatG}
-                      carbsG={carbsG}
-                      showOverview={false}
-                      showTrainingAndDaily={false}
-                      showMeals={false}
-                    />
-                  ) : null}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-[#F2F2F7] px-3 py-1.5 text-sm font-semibold text-slate-700">
+                    B {formatInt(Math.max(0, proteinG))} g ({proteinPercent}%)
+                  </span>
+                  <span className="rounded-full bg-[#F2F2F7] px-3 py-1.5 text-sm font-semibold text-slate-700">
+                    T {formatInt(Math.max(0, fatG))} g ({fatPercent}%)
+                  </span>
+                  <span className="rounded-full bg-[#F2F2F7] px-3 py-1.5 text-sm font-semibold text-slate-700">
+                    W {formatInt(Math.max(0, carbsG))} g ({carbsPercent}%)
+                  </span>
                 </div>
-              </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <dl className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-slate-500">Cel</dt>
+                    <dd className="font-semibold text-slate-900">{goalLabel || "-"}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-slate-500">Aktywność</dt>
+                    <dd className="font-semibold text-slate-900">{activityLabel} ({activity}%)</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-slate-500">Dane</dt>
+                    <dd className="font-semibold text-slate-900">
+                      {sexLabel || "-"}, {Number.isFinite(ageNum) ? `${formatInt(ageNum)} l` : "-"},{" "}
+                      {Number.isFinite(weightNum) ? `${format1(weightNum)} kg` : "-"}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
             </div>
           ) : null}
 
