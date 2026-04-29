@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { get, ref, set } from "firebase/database";
-import { db } from "@/lib/firebase";
+import { db } from "../lib/firebase";
 import { StepHeader } from "./_components/StepHeader";
 import { AppHeader, type AppTab } from "./_components/AppHeader";
 import { DailyIntakeTracker } from "./_components/DailyIntakeTracker";
